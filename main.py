@@ -7,6 +7,7 @@ import models, schemas, auth, database
 from database import engine, get_db
 from typing import List, Optional
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi_mail import FastMail, ConnectionConfig, MessageSchema, MessageType
 
@@ -55,12 +56,8 @@ async def send_email_async(subject: str, email_to: str, body: dict):
     fm = FastMail(conf)
     await fm.send_message(message)
 
-# Create tables (Only if they don't exist)
-models.Base.metadata.create_all(bind=engine)
-
 class StatusUpdate(schemas.BaseModel):
     status: str
-
 
 # Seed Initial Data (Only if empty)
 def seed_data():
@@ -102,10 +99,15 @@ def seed_data():
     finally:
         db.close()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create tables (Only if they don't exist)
+    models.Base.metadata.create_all(bind=engine)
+    # Seed Initial Data (Only if empty)
+    seed_data()
+    yield
 
-seed_data()
-
-app = FastAPI(title="Nambikkai Support Backend")
+app = FastAPI(title="Nambikkai Support Backend", lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
