@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import models, schemas, auth, database
@@ -53,8 +55,11 @@ async def send_email_async(subject: str, email_to: str, body: dict):
     fm = FastMail(conf)
     await fm.send_message(message)
 
-# Create tables
+# Create tables (Only if they don't exist)
 models.Base.metadata.create_all(bind=engine)
+
+class StatusUpdate(schemas.BaseModel):
+    status: str
 
 
 # Seed Initial Data (Only if empty)
@@ -102,6 +107,16 @@ seed_data()
 
 app = FastAPI(title="Nambikkai Support Backend")
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    body = await request.body()
+    print(f"422 Error: {exc}")
+    print(f"Request Body: {body.decode()}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": body.decode()},
+    )
+
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
@@ -123,7 +138,10 @@ def read_root():
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
 
     hashed_password = auth.get_password_hash(user.password)
     db_user = models.User(
@@ -253,7 +271,7 @@ def get_appointments_by_lawyer(lawyer_id: int, db: Session = Depends(get_db)):
 @app.patch("/api/appointments/{appointment_id}/status", response_model=schemas.Appointment)
 async def update_appointment_status(
     appointment_id: int, 
-    status_update: dict, 
+    status_update: StatusUpdate, 
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
@@ -265,7 +283,7 @@ async def update_appointment_status(
     if not db_appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
 
-    new_status = status_update.get("status")
+    new_status = status_update.status
     if not new_status:
         raise HTTPException(status_code=400, detail="Status is required")
 

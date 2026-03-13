@@ -1,23 +1,18 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
+from sqlalchemy.orm import declarative_base, sessionmaker
+DATABASE_URL = "postgresql://postgres.czcmzldelaveeaklbmcd:palayankottai@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres"
 
-load_dotenv()
+try:
+    engine = create_engine(DATABASE_URL)
+    # Test the connection
+    with engine.connect() as conn:
+        print("Database connection successful")
+except Exception as e:
+    print(f"Database connection failed: {e}")
+    raise
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./nambikkai.db")
-
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
-
 def get_db():
     db = SessionLocal()
     try:
