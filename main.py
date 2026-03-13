@@ -13,19 +13,21 @@ from fastapi_mail import FastMail, ConnectionConfig, MessageSchema, MessageType
 
 load_dotenv()
 
-# Email Configuration
-conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD"),
-    MAIL_FROM=os.getenv("MAIL_FROM"),
-    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
-    MAIL_SERVER=os.getenv("MAIL_SERVER"),
-    MAIL_FROM_NAME="Nambikkai Support",
-    MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "True") == "True",
-    MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "False") == "True",
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
-)
+# Email Helper
+def get_mail_client():
+    mail_conf = ConnectionConfig(
+        MAIL_USERNAME=os.getenv("MAIL_USERNAME", ""),
+        MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", ""),
+        MAIL_FROM=os.getenv("MAIL_FROM", ""),
+        MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
+        MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
+        MAIL_FROM_NAME="Nambikkai Support",
+        MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "True") == "True",
+        MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "False") == "True",
+        USE_CREDENTIALS=True,
+        VALIDATE_CERTS=True
+    )
+    return FastMail(mail_conf)
 
 async def send_email_async(subject: str, email_to: str, body: dict):
     # Note: For simple text/html without separate template files:
@@ -53,7 +55,7 @@ async def send_email_async(subject: str, email_to: str, body: dict):
         subtype=MessageType.html
     )
     
-    fm = FastMail(conf)
+    fm = get_mail_client()
     await fm.send_message(message)
 
 class StatusUpdate(schemas.BaseModel):
