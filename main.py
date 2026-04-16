@@ -133,6 +133,8 @@ app.add_middleware(
         "http://127.0.0.1:8080",
         "http://localhost:5504",
         "http://127.0.0.1:5504",
+        "https://nambikkai26.netlify.app",
+        "http://nambikkai26.netlify.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
