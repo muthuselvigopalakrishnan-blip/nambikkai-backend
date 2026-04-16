@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import models, schemas, auth, database
 from database import engine, get_db
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, cast
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -29,7 +29,7 @@ def get_mail_client():
     )
     return FastMail(mail_conf)
 
-async def send_email_async(subject: str, email_to: str, body: dict):
+async def send_email_async(subject: str, email_to: str, body: Dict[str, Any]):
     # Note: For simple text/html without separate template files:
     html_content = f"""
     <html>
@@ -50,7 +50,7 @@ async def send_email_async(subject: str, email_to: str, body: dict):
     
     message = MessageSchema(
         subject=subject,
-        recipients=[email_to],
+        recipients=[email_to] if isinstance(email_to, str) else [str(email_to)],
         body=html_content,
         subtype=MessageType.html
     )
@@ -124,7 +124,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with frontend URL
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:5504",
+        "http://127.0.0.1:5504",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -208,6 +217,12 @@ async def create_appointment(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
+    # Validate user exists if user_id is provided
+    if appointment.user_id:
+        user = db.query(models.User).filter(models.User.id == appointment.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+    
     db_appointment = models.Appointment(**appointment.dict())
     db.add(db_appointment)
     db.commit()
@@ -215,13 +230,13 @@ async def create_appointment(
     
     # Send Email in background
     email_body = {
-        "name": db_appointment.full_name,
+        "name": str(db_appointment.full_name) if db_appointment.full_name else "User",
         "date": str(db_appointment.appointment_date),
-        "provider": db_appointment.provider_name,
-        "status": db_appointment.status,
+        "provider": str(db_appointment.provider_name) if db_appointment.provider_name else "Provider",
+        "status": str(db_appointment.status),
         "message": f"Your appointment request has been received by {db_appointment.provider_name}. Please wait for approval."
     }
-    background_tasks.add_task(send_email_async, "Appointment Received - Nambikkai", db_appointment.email, email_body)
+    background_tasks.add_task(send_email_async, "Appointment Received - Nambikkai", str(db_appointment.email), email_body)
 
     return db_appointment
 
@@ -297,13 +312,13 @@ async def update_appointment_status(
     
     # Send Notification Email
     email_body = {
-        "name": db_appointment.full_name,
+        "name": str(db_appointment.full_name) if db_appointment.full_name else "User",
         "date": str(db_appointment.appointment_date),
-        "provider": db_appointment.provider_name,
-        "status": db_appointment.status,
+        "provider": str(db_appointment.provider_name) if db_appointment.provider_name else "Provider",
+        "status": str(db_appointment.status),
         "message": f"Your appointment status has been updated to: {db_appointment.status}."
     }
-    background_tasks.add_task(send_email_async, f"Appointment {db_appointment.status} - Nambikkai", db_appointment.email, email_body)
+    background_tasks.add_task(send_email_async, f"Appointment {db_appointment.status} - Nambikkai", str(db_appointment.email), email_body)
 
     return db_appointment
 
